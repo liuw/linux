@@ -39,6 +39,8 @@ extern void *hv_hypercall_pg;
 extern void  __percpu  **hyperv_pcpu_input_arg;
 extern void  __percpu  **hyperv_pcpu_output_arg;
 
+extern u8 __percpu **hv_synic_eventring_tail;
+
 extern u64 hv_current_partition_id;
 
 int hv_call_deposit_pages(int node, u64 partition_id, u32 num_pages);

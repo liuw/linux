@@ -51,6 +51,16 @@ EXPORT_SYMBOL_GPL(hyperv_pcpu_input_arg);
 void  __percpu **hyperv_pcpu_output_arg;
 EXPORT_SYMBOL_GPL(hyperv_pcpu_output_arg);
 
+/*
+ * Per-cpu array holding the tail pointer for the SynIC event ring buffer
+ * for each SINT.
+ *
+ * We cannot maintain this in mshv driver because the tail pointer should
+ * persist even if the mshv driver is unloaded.
+ */
+u8 __percpu **hv_synic_eventring_tail;
+EXPORT_SYMBOL_GPL(hv_synic_eventring_tail);
+
 u32 hv_max_vp_index;
 EXPORT_SYMBOL_GPL(hv_max_vp_index);
 
@@ -58,11 +68,13 @@ static int hv_cpu_init(unsigned int cpu)
 {
 	u64 msr_vp_index;
 	struct hv_vp_assist_page **hvp = &hv_vp_assist_page[smp_processor_id()];
+	unsigned int order = hv_root_partition ? 1 : 0;
+	u8 **synic_eventring_tail;
 	void **input_arg;
 	struct page *pg;
 
 	/* hv_cpu_init() can be called with IRQs disabled from hv_resume() */
-	pg = alloc_pages(irqs_disabled() ? GFP_ATOMIC : GFP_KERNEL, hv_root_partition ? 1 : 0);
+	pg = alloc_pages(irqs_disabled() ? GFP_ATOMIC : GFP_KERNEL, order);
 	if (unlikely(!pg))
 		return -ENOMEM;
 
@@ -73,6 +85,14 @@ static int hv_cpu_init(unsigned int cpu)
 
 		output_arg = (void **)this_cpu_ptr(hyperv_pcpu_output_arg);
 		*output_arg = page_address(pg + 1);
+
+		synic_eventring_tail = (u8 **)this_cpu_ptr(hv_synic_eventring_tail);
+		*synic_eventring_tail = kcalloc(HV_SYNIC_SINT_COUNT, sizeof(u8),
+						irqs_disabled() ? GFP_ATOMIC : GFP_KERNEL);
+		if (unlikely(!*synic_eventring_tail)) {
+			__free_pages(pg, order);
+			return -ENOMEM;
+		}
 	}
 
 	msr_vp_index = hv_get_register(HV_REGISTER_VP_INDEX);
@@ -197,6 +217,7 @@ EXPORT_SYMBOL_GPL(clear_hv_tscchange_cb);
 static int hv_cpu_die(unsigned int cpu)
 {
 	struct hv_reenlightenment_control re_ctrl;
+	u8 **synic_eventring_tail;
 	unsigned int new_cpu;
 	unsigned long flags;
 	void **input_arg;
@@ -212,6 +233,10 @@ static int hv_cpu_die(unsigned int cpu)
 
 		output_arg = (void **)this_cpu_ptr(hyperv_pcpu_output_arg);
 		*output_arg = NULL;
+
+		synic_eventring_tail = (u8 **)this_cpu_ptr(hv_synic_eventring_tail);
+		kfree(*synic_eventring_tail);
+		*synic_eventring_tail = NULL;
 	}
 
 	local_irq_restore(flags);
@@ -390,10 +415,13 @@ void __init hyperv_init(void)
 
 	BUG_ON(hyperv_pcpu_input_arg == NULL);
 
-	/* Allocate the per-CPU state for output arg for root */
 	if (hv_root_partition) {
+		/* Allocate the per-CPU state for output arg for root */
 		hyperv_pcpu_output_arg = alloc_percpu(void *);
 		BUG_ON(hyperv_pcpu_output_arg == NULL);
+
+		hv_synic_eventring_tail = alloc_percpu(u8 *);
+		BUG_ON(hv_synic_eventring_tail == NULL);
 	}
 
 	/* Allocate percpu VP index */
