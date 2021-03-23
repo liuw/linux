@@ -235,3 +235,59 @@ int hv_call_create_vp(int node, u64 partition_id, u32 vp_index, u32 flags)
 }
 EXPORT_SYMBOL_GPL(hv_call_create_vp);
 
+static char log_buf[PAGE_SIZE] __aligned(PAGE_SIZE);
+#define LOG_CACHE_SIZE (5 * PAGE_SIZE)
+static char log_cache[LOG_CACHE_SIZE] __aligned(PAGE_SIZE);
+static size_t num_chars_cached = 0;
+void hv_log(char *buf, size_t size)
+{
+	u16 completed;
+	u64 hypercall_status;
+	int status;
+	int i;
+
+	// If the hypercall page has not been setup yet, then
+	// we cannot issue the hypercall. Just cache the messages
+	// for now.
+	if (!hv_hypercall_pg) {
+		size_t bytes_avail = LOG_CACHE_SIZE - num_chars_cached;
+		size_t copy_bytes;
+
+		copy_bytes = min(size, bytes_avail);
+
+		// If there is not enough space in the cache,
+		// not much we can do. Bail out.
+		if (copy_bytes == 0)
+			return;
+		memcpy(&log_cache[num_chars_cached], buf, copy_bytes);
+		num_chars_cached += copy_bytes;
+		return;
+	}
+
+	// Data in the cache, flush it now.
+	if (num_chars_cached) {
+		for (i = 0; i < num_chars_cached; i++) {
+			log_buf[0] = log_cache[i];
+			hypercall_status = hv_do_rep_hypercall(
+				HVCALL_OUTPUT_DEBUG_CHAR, 0, 0, log_buf, NULL);
+			completed = (hypercall_status & HV_HYPERCALL_REP_COMP_MASK) >>
+				     HV_HYPERCALL_REP_COMP_OFFSET;
+			status = hypercall_status & HV_HYPERCALL_RESULT_MASK;
+		}
+		num_chars_cached = 0;
+	}
+
+	for (i = 0; i < size; i++) {
+		log_buf[0] = buf[i];
+		hypercall_status = hv_do_rep_hypercall(
+			HVCALL_OUTPUT_DEBUG_CHAR, 0, 0, log_buf, NULL);
+		completed = (hypercall_status & HV_HYPERCALL_REP_COMP_MASK) >>
+			     HV_HYPERCALL_REP_COMP_OFFSET;
+		status = hypercall_status & HV_HYPERCALL_RESULT_MASK;
+
+		// cannot do anything here on error.
+		//if (status != HV_STATUS_SUCCESS) {
+	}
+}
+EXPORT_SYMBOL_GPL(hv_log);
+
