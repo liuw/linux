@@ -5176,8 +5176,8 @@ static void intel_iommu_probe_finalize(struct device *dev)
 		set_dma_ops(dev, NULL);
 }
 
-static void intel_iommu_get_resv_regions(struct device *device,
-					 struct list_head *head)
+void intel_iommu_get_resv_regions(struct device *device,
+				 struct list_head *head)
 {
 	int prot = DMA_PTE_READ | DMA_PTE_WRITE;
 	struct iommu_resv_region *reg;
@@ -5232,6 +5232,7 @@ static void intel_iommu_get_resv_regions(struct device *device,
 		return;
 	list_add_tail(&reg->list, head);
 }
+EXPORT_SYMBOL_GPL(intel_iommu_get_resv_regions);
 
 int intel_iommu_enable_pasid(struct intel_iommu *iommu, struct device *dev)
 {
