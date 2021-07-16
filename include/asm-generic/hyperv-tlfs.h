@@ -960,6 +960,7 @@ struct hv_set_partition_property {
 struct hv_translate_virtual_address_in {
 	u64 partition_id;
 	u32 vp_index;
+	u32 padding;
 	u64 control_flags;
 	u64 gva_page;
 } __packed;
