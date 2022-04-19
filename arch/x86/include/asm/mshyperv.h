@@ -81,6 +81,12 @@ static inline u64 hv_do_hypercall(u64 control, void *input, void *output)
 	return hv_status;
 }
 
+/* Hypercall to the L0 hypervisor */
+static inline u64 hv_do_nested_hypercall(u64 control, void *input, void *output)
+{
+	return hv_do_hypercall(control | HV_HYPERCALL_NESTED_BIT, input, output);
+}
+
 /* Fast hypercall with 8 bytes of input and no output */
 static inline u64 hv_do_fast_hypercall8(u16 code, u64 input1)
 {
