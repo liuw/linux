@@ -160,6 +160,10 @@ extern int hv_post_message(union hv_connection_id connection_id,
 			 enum hv_message_type message_type,
 			 void *payload, size_t payload_size);
 
+extern int hv_post_message_nested(union hv_connection_id connection_id,
+			 enum hv_message_type message_type,
+			 void *payload, size_t payload_size);
+
 extern int hv_synic_alloc(void);
 
 extern void hv_synic_free(void);
