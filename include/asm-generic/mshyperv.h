@@ -88,15 +88,11 @@ static inline unsigned int hv_repcomp(u64 status)
  * Rep hypercalls. Callers of this functions are supposed to ensure that
  * rep_count and varhead_size comply with Hyper-V hypercall definition.
  */
-static inline u64 hv_do_rep_hypercall(u16 code, u16 rep_count, u16 varhead_size,
-				      void *input, void *output)
+static inline u64 _hv_do_rep_hypercall(u64 control, u16 code, u16 rep_count, u16 varhead_size,
+				       void *input, void *output)
 {
-	u64 control = code;
 	u64 status;
 	u16 rep_comp;
-
-	control |= (u64)varhead_size << HV_HYPERCALL_VARHEAD_OFFSET;
-	control |= (u64)rep_count << HV_HYPERCALL_REP_COMP_OFFSET;
 
 	do {
 		status = hv_do_hypercall(control, input, output);
@@ -112,6 +108,29 @@ static inline u64 hv_do_rep_hypercall(u16 code, u16 rep_count, u16 varhead_size,
 	} while (rep_comp < rep_count);
 
 	return status;
+}
+
+static inline u64 hv_do_rep_hypercall(u16 code, u16 rep_count, u16 varhead_size,
+				       void *input, void *output)
+{
+	u64 control = code;
+
+	control |= (u64)varhead_size << HV_HYPERCALL_VARHEAD_OFFSET;
+	control |= (u64)rep_count << HV_HYPERCALL_REP_COMP_OFFSET;
+
+	return _hv_do_rep_hypercall(control, code, rep_count, varhead_size, input, output);
+}
+
+static inline u64 hv_do_rep_nested_hypercall(u16 code, u16 rep_count, u16 varhead_size,
+				       void *input, void *output)
+{
+	u64 control = code;
+
+	control |= (u64)varhead_size << HV_HYPERCALL_VARHEAD_OFFSET;
+	control |= (u64)rep_count << HV_HYPERCALL_REP_COMP_OFFSET;
+	control |= HV_HYPERCALL_NESTED_BIT;
+
+	return _hv_do_rep_hypercall(control, code, rep_count, varhead_size, input, output);
 }
 
 /* Generate the guest OS identifier as described in the Hyper-V TLFS */
